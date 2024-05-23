@@ -7,6 +7,7 @@ use App\Helpers\ExtensionHelper;
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\User;
+use Illuminate\Http\Response;
 
 class InvoiceController extends Controller
 {
@@ -71,7 +72,9 @@ class InvoiceController extends Controller
                 }
             }
             $payment_method = ExtensionHelper::getPaymentMethod($payment_method, $total, $products, $invoice->id);
-            if ($payment_method) {
+            if ($payment_method instanceof Response) {
+                return $payment_method;
+            } else {
                 return redirect($payment_method);
             }
         }
