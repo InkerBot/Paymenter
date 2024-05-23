@@ -8,9 +8,8 @@ use Alipay\EasySDK\Kernel\Util\ResponseChecker;
 use App\Classes\Extensions\Gateway;
 use App\Helpers\ExtensionHelper;
 use Exception;
-use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 
 class AliPay extends Gateway
 {
@@ -22,51 +21,6 @@ class AliPay extends Gateway
             'author' => 'InkerBot',
             'website' => 'https://inker.bot',
         ];
-    }
-
-    private function getApiInstance() {
-        $options = new Config();
-        $options->protocol = 'https';
-        if (ExtensionHelper::getConfig('AliPay', 'live')) {
-            $options->gatewayHost = 'openapi.alipay.com';
-        } else {
-            $options->gatewayHost = 'openapi-sandbox.dl.alipaydev.com';
-        }
-        $options->signType = 'RSA2';
-
-        $options->appId = ExtensionHelper::getConfig('AliPay', 'app_id');
-
-        // 为避免私钥随源码泄露，推荐从文件中读取私钥字符串而不是写入源码中
-        $options->merchantPrivateKey = ExtensionHelper::getConfig('AliPay', 'private_key');
-
-        if (ExtensionHelper::getConfig('AliPay', 'is_key_mode')) {
-            $options->alipayPublicKey = ExtensionHelper::getConfig('AliPay', 'alipay_public_key');
-        } else {
-            $options->alipayCertPath = base_path(ExtensionHelper::getConfig('AliPay', 'alipay_cert_public_key'));
-            $options->alipayRootCertPath = base_path(ExtensionHelper::getConfig('AliPay', 'alipay_root_cert'));
-            $options->merchantCertPath = base_path(ExtensionHelper::getConfig('AliPay', 'app_cert_public_key'));
-        }
-
-        $options->notifyUrl = url('/extensions/alipay/webhook');
-        Factory::setOptions($options);
-    }
-
-    private function isPaid($orderId)
-    {
-        $this->getApiInstance();
-
-        $queryResult = Factory::payment()
-            ->common()
-            ->query($orderId);
-        $responseChecker = new ResponseChecker();
-        if ($responseChecker->success($queryResult)) {
-            $trade_result = $queryResult->tradeStatus === "TRADE_SUCCESS" || $queryResult->tradeStatus === "TRADE_FINISHED";
-            if ($trade_result) {
-                ExtensionHelper::paymentDone($orderId, 'AliPay');
-                return true;
-            }
-        }
-        return false;
     }
 
     public function pay($total, $products, $orderId)
@@ -96,11 +50,55 @@ class AliPay extends Gateway
             );
 
         $responseChecker = new ResponseChecker();
-        //3. 处理响应或异常
         if (!$responseChecker->success($payResult)) {
             throw new Exception($payResult->msg . ', ' . $payResult->subMsg);
         }
         return new Response($payResult->body);
+    }
+
+    private function getApiInstance()
+    {
+        $options = new Config();
+        $options->protocol = 'https';
+        if (ExtensionHelper::getConfig('AliPay', 'live')) {
+            $options->gatewayHost = 'openapi.alipay.com';
+        } else {
+            $options->gatewayHost = 'openapi-sandbox.dl.alipaydev.com';
+        }
+        $options->signType = 'RSA2';
+
+        $options->appId = ExtensionHelper::getConfig('AliPay', 'app_id');
+
+        $options->merchantPrivateKey = ExtensionHelper::getConfig('AliPay', 'private_key');
+
+        if (ExtensionHelper::getConfig('AliPay', 'is_key_mode')) {
+            $options->alipayPublicKey = ExtensionHelper::getConfig('AliPay', 'alipay_public_key');
+        } else {
+            $options->alipayCertPath = base_path(ExtensionHelper::getConfig('AliPay', 'alipay_cert_public_key'));
+            $options->alipayRootCertPath = base_path(ExtensionHelper::getConfig('AliPay', 'alipay_root_cert'));
+            $options->merchantCertPath = base_path(ExtensionHelper::getConfig('AliPay', 'app_cert_public_key'));
+        }
+
+        $options->notifyUrl = url('/extensions/alipay/webhook');
+        Factory::setOptions($options);
+    }
+
+    private function isPaid($orderId)
+    {
+        $this->getApiInstance();
+
+        $queryResult = Factory::payment()
+            ->common()
+            ->query($orderId);
+        $responseChecker = new ResponseChecker();
+        if ($responseChecker->success($queryResult)) {
+            $tradeResult = $queryResult->tradeStatus === "TRADE_SUCCESS" || $queryResult->tradeStatus === "TRADE_FINISHED";
+            if ($tradeResult) {
+                ExtensionHelper::paymentDone($orderId, 'AliPay');
+                return true;
+            }
+        }
+        return false;
     }
 
     public function webhook(Request $request)
@@ -118,10 +116,11 @@ class AliPay extends Gateway
         if (str($appId) != ExtensionHelper::getConfig('AliPay', 'app_id')) {
             return response('failure');
         }
-        $order_id = $request->get('out_trade_no');
-        $trade_status = str($request->get('trade_status'));
-        if ($trade_status === 'TRADE_SUCCESS' || $trade_status === 'TRADE_FINISHED') {
-            ExtensionHelper::paymentDone($order_id, 'AliPay');
+
+        $orderId = $request->get('out_trade_no');
+        $tradeStatus = str($request->get('trade_status'));
+        if ($tradeStatus === 'TRADE_SUCCESS' || $tradeStatus === 'TRADE_FINISHED') {
+            ExtensionHelper::paymentDone($orderId, 'AliPay');
         }
         return response('success');
     }
@@ -141,9 +140,10 @@ class AliPay extends Gateway
         if (str($appId) != ExtensionHelper::getConfig('AliPay', 'app_id')) {
             throw new Exception('Invalid request');
         }
-        $order_id = $request->get('out_trade_no');
-        $this->isPaid($order_id);
-        return redirect()->route('clients.invoice.show', $order_id);
+
+        $orderId = $request->get('out_trade_no');
+        $this->isPaid($orderId);
+        return redirect()->route('clients.invoice.show', $orderId);
     }
 
     public function getConfig()
