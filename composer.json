@@ -15,8 +15,15 @@
             "homepage": "https://github.com/paymenter/paymenter/contributors"
         }
     ],
+    "repositories": [
+        {
+            "url": "https://github.com/InkerBot/alipay-easysdk",
+            "type": "git"
+        }
+    ],
     "require": {
         "php": "^8.1 || ^8.2 || ^8.3",
+        "alipaysdk/easysdk": "dev-master",
         "diglactic/laravel-breadcrumbs": "^8.1",
         "doctrine/dbal": "^3.5",
         "fakerphp/faker": "^1.20",
